@@ -1,0 +1,227 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "resume-screen",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "00e973d8-3bd8-4371-a9a1-6c3c075a8151",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        288,
+        256
+      ],
+      "webhookId": "resume-screen-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.toJsonString()}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "id": "cf098a1c-2586-42ba-9d1c-b326de011dcb"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6de80049-bf01-4020-8895-552734f8f36f",
+      "name": "Data Validation",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        512,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"error\": \"Invalid data format\",\n  \"message\": \"Required fields missing or invalid: name, email, job_id, job_description, resume_file\",\n  \"required_format\": {\n    \"name\": \"string (not empty)\",\n    \"email\": \"string (valid email format)\",\n    \"job_id\": \"string (not empty)\",\n    \"job_description\": \"string (not empty)\",\n    \"resume_file\": \"string (base64 encoded file)\"\n  },\n  \"status\": \"validation_failed\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "76a71c63-f878-4e84-8d0c-d1b350104d0b",
+      "name": "Validation Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        736,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst bodyData = items.map((item) => item.json.body);\n\nreturn [{ json: { projects: bodyData } }];\n"
+      },
+      "id": "4b73bc1f-dd4b-4397-b551-5969967646b4",
+      "name": "Decode Resume",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst candidate_info = items.map((item) => {\n  return {\n    ai_score: item.json.choices[0].message.content.ai_score,\n    pros: item.json.choices[0].message.content.pros,\n    cons: item.json.choices[0].message.content.cons,\n    missing_skills: item.json.choices[0].message.content.missing_skills,\n    analysis_explanation:\n      item.json.choices[0].message.content.analysis_explanation,\n  };\n});\nreturn [\n  { json: { candidate_info }, pairedItem: items.map((_, index) => index) },\n];\n"
+      },
+      "id": "94a851a8-e330-4840-92c7-acece2fd82d0",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "e7b354df-c961-4c75-aef0-4f552d4d2d9b",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-3.5-turbo",
+          "mode": "list",
+          "cachedResultName": "GPT-3.5-TURBO"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={\n\"role\": \"system\",\n\"content\": \"You are an expert HR resume screener. Your task is to analyze a candidate's resume against a job description and provide a comprehensive evaluation. You must respond ONLY with valid JSON in the exact format specified, with no additional text or formatting. Provide your analysis in this exact JSON format:\\\\n{\\\\n  \\\\\\\"ai_score\\\\\\\": <number between 0-100>,\\\\n  \\\\\\\"pros\\\\\\\": [\\\\\\\"list of candidate strengths and matching qualifications\\\\\\\"],\\\\n  \\\\\\\"cons\\\\\\\": [\\\\\\\"list of weaknesses or concerns\\\\\\\"],\\\\n  \\\\\\\"missing_skills\\\\\\\": [\\\\\\\"list of required skills not evidenced in resume\\\\\\\"],\\\\n  \\\\\\\"analysis_explanation\\\\\\\": \\\\\\\"detailed explanation of how you arrived at the score, what factors were considered, and reasoning behind pros/cons\\\\\\\"\\\\n}\\\"\\n\"\n},\n{\n\"role\": \"user\",\n\"content\": \"{{\nJSON.stringify({\njob_description: $json.projects[0].job_description,\ncandidate_resume: $json.projects[0].resume_file,\ncandidate_info: {\nname: $json.projects[0].name,\nemail: $json.projects[0].email,\njob_id: $json.projects[0].job_id\n}\n})\n}}\"}\"\n}\n],\n\"temperature\": 0.3\n}\n}",
+              "role": "assistant"
+            },
+            {
+              "content": "={{\nJSON.stringify({\njob_description: $json.projects[0].job_description,\ncandidate_resume: $json.projects[0].resume_file,\ncandidate_info: {\nname: $json.projects[0].name,\nemail: $json.projects[0].email,\njob_id: $json.projects[0].job_id\n}\n})\n}}"
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        944,
+        256
+      ],
+      "id": "89764d9d-a60a-407c-9c69-0f19065cf226",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "zPQnlYxIcOmnZM7y",
+          "name": "OpenAi account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Data Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Validation": {
+      "main": [
+        [
+          {
+            "node": "Decode Resume",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validation Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decode Resume": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "cb47b4d2-3731-4d86-a566-6ae4ee194bb9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0cd70ba8e5e50784618d0a5caca48dbd568f43729993a7c84dce2a20b1867edb"
+  },
+  "id": "wTqijh3mkWKwLPGr",
+  "tags": []
+}
